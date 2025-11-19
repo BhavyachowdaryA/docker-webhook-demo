@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        IMAGE = "<your-dockerhub-username>/flask-k8s-demo"
+        IMAGE = "bhavyachowdary756/flask-k8s-demo"
         KUBECONFIG = credentials('kubeconfig-secret')
         DOCKERHUB = credentials('dockerhub-credentials')
     }
