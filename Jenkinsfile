@@ -2,42 +2,60 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "flask-webhook-demo"
+        IMAGE = "<your-dockerhub-username>/flask-k8s-demo"
+        KUBECONFIG = credentials('kubeconfig-secret')
+        DOCKERHUB = credentials('dockerhub-credentials')
     }
 
     stages {
-        stage('Checkout') {
+
+        stage('Checkout Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/BhavyachowdaryA/docker-webhook-demo.git'
+                checkout scm
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    docker.build("${IMAGE_NAME}")
+                    docker.build("${IMAGE}:${BUILD_NUMBER}")
                 }
             }
         }
 
-        stage('Run Docker Container') {
+        stage('Login to Docker Hub') {
             steps {
                 script {
-                    // Stop and remove existing container if running
-                    sh "docker rm -f ${IMAGE_NAME} || true"
-                    // Run new container
-                    sh "docker run -d -p 5000:5000 --name ${IMAGE_NAME} ${IMAGE_NAME}"
+                    sh "echo ${DOCKERHUB_PSW} | docker login -u ${DOCKERHUB_USR} --password-stdin"
+                }
+            }
+        }
+
+        stage('Push Image to Docker Hub') {
+            steps {
+                script {
+                    sh "docker push ${IMAGE}:${BUILD_NUMBER}"
+                    sh "docker tag ${IMAGE}:${BUILD_NUMBER} ${IMAGE}:latest"
+                    sh "docker push ${IMAGE}:latest"
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    // Update image version on-the-fly
+                    sh """
+                    kubectl --kubeconfig=${KUBECONFIG} set image deployment/flask-k8s-app \
+                    flask-container=${IMAGE}:${BUILD_NUMBER}
+                    """
                 }
             }
         }
     }
 
     post {
-        success {
-            echo "Deployment Successful!"
-        }
-        failure {
-            echo "Deployment Failed!"
-        }
+        success { echo "🎉 Deployment to Kubernetes successful!" }
+        failure { echo "❌ Deployment failed!" }
     }
 }
